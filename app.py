@@ -6,7 +6,6 @@ from flask import Flask, request, render_template_string
 app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Beautiful HTML UI with ATS score and copy button
 HTML = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -173,6 +172,16 @@ HTML = '''
       box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
     }
 
+    .error {
+      background: #fef2f2;
+      color: #b91c1c;
+      padding: 14px;
+      border-radius: 10px;
+      margin: 20px 0;
+      border-left: 4px solid #ef4444;
+      font-weight: 600;
+    }
+
     .result-card {
       background: linear-gradient(135deg, #f0fdf4, #dcfce7);
       border: 2px solid #bbf7d0;
@@ -256,6 +265,13 @@ HTML = '''
       transform: scale(1.02);
     }
 
+    .pay-link {
+      display: inline-block;
+      color: var(--primary-dark);
+      font-weight: 700;
+      text-decoration: underline;
+    }
+
     footer {
       text-align: center;
       padding: 20px;
@@ -314,6 +330,12 @@ HTML = '''
           </button>
         </form>
 
+        {% if error %}
+        <div class="error">
+          🔒 {{ error }} <a href="https://resumeoptim.carrd.co" class="pay-link">Pay ₹399 to unlock</a>
+        </div>
+        {% endif %}
+
         {% if result %}
         <div class="result-card">
           <div class="ats-meter">
@@ -344,15 +366,19 @@ HTML = '''
 
 @app.route('/')
 def home():
-    # Check for Razorpay success parameter
-    if request.args.get('payment_success') != 'true':
-        return '<h2 style="text-align:center; padding:50px; font-family:sans-serif;">🔒 Access denied. <a href="https://YOUR-CARRD-LINK.carrd.co" style="color:#4f46e5;">Pay ₹399 to unlock</a>.</h2>'
+    # Always show the form — no paywall on homepage
     return render_template_string(HTML)
 
 @app.route('/', methods=['POST'])
 def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
+    
+    # Check if user has paid (via referrer or query param)
+    referrer = request.headers.get('Referer', '')
+    if 'payment_success=true' not in referrer and 'paid=true' not in request.args:
+        error = "You must pay ₹399 to use this feature."
+        return render_template_string(HTML, resume=resume, job_desc=job_desc, error=error)
     
     # Calculate ATS keyword match
     job_words = set(re.findall(r'\b[A-Z][a-z]{2,}\b|\b\w{4,}\b', job_desc.lower()))
@@ -379,6 +405,7 @@ Job: {job_desc}"""
         result = response.choices[0].message['content'].strip()
     except Exception as e:
         result = f"Error: {str(e)}"
+        return render_template_string(HTML, resume=resume, job_desc=job_desc, error=result)
     
     return render_template_string(HTML, 
                                 resume=resume, 
@@ -389,5 +416,5 @@ Job: {job_desc}"""
                                 total=total)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
