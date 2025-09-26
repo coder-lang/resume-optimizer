@@ -1,13 +1,12 @@
 import os
 import re
 import openai
-import stripe
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
+# Beautiful HTML UI with ATS score and copy button
 HTML = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -345,8 +344,9 @@ HTML = '''
 
 @app.route('/')
 def home():
-    if request.args.get('paid') != 'true':
-        return '<h2 style="text-align:center; padding:50px; font-family:sans-serif;">🔒 Access denied. <a href="https://YOUR-CARRD-LINK.carrd.co" style="color:#4f46e5;">Pay $5 to unlock</a>.</h2>'
+    # Check for Razorpay success parameter
+    if request.args.get('payment_success') != 'true':
+        return '<h2 style="text-align:center; padding:50px; font-family:sans-serif;">🔒 Access denied. <a href="https://YOUR-CARRD-LINK.carrd.co" style="color:#4f46e5;">Pay ₹399 to unlock</a>.</h2>'
     return render_template_string(HTML)
 
 @app.route('/', methods=['POST'])
