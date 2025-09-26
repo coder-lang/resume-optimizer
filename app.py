@@ -1,9 +1,11 @@
 import os
 import re
 import openai
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, session
+import secrets
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(16))
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 HTML = '''
@@ -366,17 +368,19 @@ HTML = '''
 
 @app.route('/')
 def home():
-    # Always show the form — no paywall on homepage
     return render_template_string(HTML)
+
+@app.route('/success')
+def payment_success():
+    session['is_paid'] = True
+    return '<script>window.location.href="/";</script>'
 
 @app.route('/', methods=['POST'])
 def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
     
-    # Check if user has paid (via referrer or query param)
-    referrer = request.headers.get('Referer', '')
-    if 'payment_success=true' not in referrer and 'paid=true' not in request.args:
+    if not session.get('is_paid'):
         error = "You must pay ₹399 to use this feature."
         return render_template_string(HTML, resume=resume, job_desc=job_desc, error=error)
     
