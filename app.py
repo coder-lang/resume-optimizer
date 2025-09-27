@@ -2,6 +2,7 @@ import os
 import re
 import openai
 from flask import Flask, request, render_template_string, session
+from datetime import datetime, timedelta
 import secrets
 
 app = Flask(__name__)
@@ -334,7 +335,7 @@ HTML = '''
 
         {% if error %}
         <div class="error">
-          🔒 {{ error }} <a href="https://resumeoptim.carrd.co" class="pay-link">Pay ₹399 to unlock</a>
+          🔒 {{ error }} <a href="https://resumeoptim.carrd.co" class="pay-link">Pay ₹49 for 24-hour access</a>
         </div>
         {% endif %}
 
@@ -366,23 +367,38 @@ HTML = '''
 </html>
 '''
 
+def is_access_valid():
+    """Check if user has valid 24-hour access"""
+    if not session.get('access_granted'):
+        return False
+    expiry = session.get('access_expiry')
+    if not expiry:
+        return False
+    return datetime.utcnow().isoformat() < expiry
+
 @app.route('/')
 def home():
-    return render_template_string(HTML)
+    if is_access_valid():
+        return render_template_string(HTML)
+    else:
+        return '<h2 style="text-align:center; padding:50px; font-family:sans-serif;">🔒 Access denied. <a href="https://resumeoptim.carrd.co" style="color:#4f46e5;">Pay ₹49 for 24-hour access</a>.</h2>'
 
 @app.route('/success')
 def payment_success():
-    session['is_paid'] = True
+    # Grant 24-hour access from now
+    expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+    session['access_granted'] = True
+    session['access_expiry'] = expiry
     return '<script>window.location.href="/";</script>'
 
 @app.route('/', methods=['POST'])
 def optimize():
+    if not is_access_valid():
+        error = "You must pay ₹49 for 24-hour access."
+        return render_template_string(HTML, error=error)
+    
     resume = request.form['resume']
     job_desc = request.form['job_desc']
-    
-    if not session.get('is_paid'):
-        error = "You must pay ₹399 to use this feature."
-        return render_template_string(HTML, resume=resume, job_desc=job_desc, error=error)
     
     # Calculate ATS keyword match
     job_words = set(re.findall(r'\b[A-Z][a-z]{2,}\b|\b\w{4,}\b', job_desc.lower()))
