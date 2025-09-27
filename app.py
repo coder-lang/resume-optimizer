@@ -397,14 +397,23 @@ def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
     
-    # ATS keyword match
-    job_words = set(re.findall(r'\b[A-Z][a-z]{2,}\b|\b\w{4,}\b', job_desc.lower()))
-    resume_lower = resume.lower()
-    matched = sum(1 for word in job_words if word in resume_lower)
-    total = len(job_words) if job_words else 1
-    score = min(100, int((matched / total) * 100))
+    # ------------------ ATS Score Calculation ------------------
+    def extract_keywords(text):
+        words = re.split(r'[,\.\s]+', text.lower())
+        keywords = {word.strip() for word in words if len(word.strip()) >= 2}
+        return keywords
+
+    job_keywords = extract_keywords(job_desc)
+    resume_keywords = extract_keywords(resume)
+    matched = sum(1 for word in job_keywords if word in resume_keywords)
+    total = len(job_keywords)
+    if total == 0:
+        score = 0
+    else:
+        score = min(100, int((matched / total) * 100))
+    # ---------------------------------------------------------
     
-    # OpenAI v1.x API call
+    # ------------------ OpenAI Call ------------------
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
@@ -428,6 +437,7 @@ Job: {job_desc}"""
     except Exception as e:
         result = f"Error: {str(e)}"
         return render_template_string(HTML, resume=resume, job_desc=job_desc, error=result)
+    # ---------------------------------------------------------
     
     return render_template_string(HTML, 
                                 resume=resume, 
