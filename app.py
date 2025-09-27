@@ -1,17 +1,14 @@
 import os
 import re
-import secrets
 from datetime import datetime, timedelta
-from flask import Flask, request, render_template_string, session
+from flask import Flask, request, render_template_string
 from openai import OpenAI
+import secrets
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(16))
-app.config.update(
-    SESSION_COOKIE_SECURE=False,  # Required for Render (HTTPS termination)
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-)
+
+# In-memory token store (resets on deploy — fine for MVP)
+valid_tokens = {}
 
 HTML = '''
 <!DOCTYPE html>
@@ -372,24 +369,23 @@ HTML = '''
 '''
 
 def is_access_valid():
-    if not session.get('access_granted'):
-        return False
-    expiry = session.get('access_expiry')
-    if not expiry:
-        return False
-    return datetime.utcnow().isoformat() < expiry
+    token = request.args.get('token')
+    if token and token in valid_tokens:
+        expiry = valid_tokens[token]
+        if datetime.utcnow().isoformat() < expiry:
+            return True
+    return False
 
 @app.route('/')
 def home():
-    # Always show the UI — no paywall on first visit
     return render_template_string(HTML)
 
 @app.route('/success')
 def payment_success():
+    token = secrets.token_urlsafe(16)
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
-    session['access_granted'] = True
-    session['access_expiry'] = expiry
-    return '<script>window.location.replace("https://resume-optimizer-briq.onrender.com/");</script>'
+    valid_tokens[token] = expiry
+    return f'<script>alert("Thank you! You now have 24-hour access."); window.location.replace("https://resume-optimizer-briq.onrender.com/?token={token}");</script>'
 
 @app.route('/', methods=['POST'])
 def optimize():
@@ -400,39 +396,29 @@ def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
     
-    # ------------------ ATS Score Calculation ------------------
+    # ATS Score
     def extract_keywords(text):
         words = re.split(r'[,\.\s]+', text.lower())
-        keywords = {word.strip() for word in words if len(word.strip()) >= 2}
-        return keywords
-
+        return {word.strip() for word in words if len(word.strip()) >= 2}
+    
     job_keywords = extract_keywords(job_desc)
     resume_keywords = extract_keywords(resume)
     matched = sum(1 for word in job_keywords if word in resume_keywords)
     total = len(job_keywords)
-    if total == 0:
-        score = 0
-    else:
-        score = min(100, int((matched / total) * 100))
-    # ---------------------------------------------------------
+    score = 0 if total == 0 else min(100, int((matched / total) * 100))
     
-    # ------------------ OpenAI Call ------------------
+    # OpenAI Call
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""Rewrite this resume bullet to match the job description. 
+            messages=[{"role": "user", "content": f"""Rewrite this resume bullet to match the job description. 
 - Use EXACT keywords from the job description.
 - Keep under 25 words.
 - No pronouns ("I", "my"), no fluff.
 
 Resume: {resume}
-Job: {job_desc}"""
-                }
-            ],
+Job: {job_desc}"""}],
             max_tokens=100,
             temperature=0.7
         )
@@ -440,7 +426,6 @@ Job: {job_desc}"""
     except Exception as e:
         result = f"Error: {str(e)}"
         return render_template_string(HTML, resume=resume, job_desc=job_desc, error=result)
-    # ---------------------------------------------------------
     
     return render_template_string(HTML, 
                                 resume=resume, 
