@@ -336,7 +336,7 @@ HTML = '''
 
         {% if error %}
         <div class="error">
-          🔒 {{ error }} <a href="https://resumeoptim.carrd.co" class="pay-link">Pay ₹49 for 24-hour access</a>
+          🔒 {{ error }}
         </div>
         {% endif %}
 
@@ -382,6 +382,7 @@ def home():
 
 @app.route('/success')
 def payment_success():
+    # This route is kept for future Razorpay use — not used in WhatsApp flow
     token = secrets.token_urlsafe(16)
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
     valid_tokens[token] = expiry
@@ -390,7 +391,13 @@ def payment_success():
 @app.route('/', methods=['POST'])
 def optimize():
     if not is_access_valid():
-        error = "You must pay ₹49 for 24-hour access."
+        # WhatsApp + UPI payment instructions
+        error = """
+        🔒 Pay ₹49 for 24-hour access:<br><br>
+        1. Pay via UPI: <strong>goodluckankur@okaxis</strong><br>
+        2. WhatsApp screenshot to <strong>+91 8851233153</strong><br>
+        3. Get instant access link!
+        """
         return render_template_string(HTML, error=error)
     
     resume = request.form['resume']
