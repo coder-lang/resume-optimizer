@@ -1,7 +1,7 @@
 import os
 import re
 from datetime import datetime, timedelta
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, Markup
 from openai import OpenAI
 import secrets
 
@@ -177,13 +177,11 @@ HTML = '''
     }
 
     .error {
-      background: #fef2f2;
-      color: #b91c1c;
-      padding: 14px;
-      border-radius: 10px;
-      margin: 20px 0;
-      border-left: 4px solid #ef4444;
-      font-weight: 600;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 25px;
+      margin: 25px 0;
     }
 
     .result-card {
@@ -269,13 +267,6 @@ HTML = '''
       transform: scale(1.02);
     }
 
-    .pay-link {
-      display: inline-block;
-      color: var(--primary-dark);
-      font-weight: 700;
-      text-decoration: underline;
-    }
-
     footer {
       text-align: center;
       padding: 20px;
@@ -336,7 +327,7 @@ HTML = '''
 
         {% if error %}
         <div class="error">
-          🔒 {{ error }}
+          {{ error }}
         </div>
         {% endif %}
 
@@ -382,7 +373,7 @@ def home():
 
 @app.route('/success')
 def payment_success():
-    # This route is kept for future Razorpay use — not used in WhatsApp flow
+    # Kept for future use — not used in WhatsApp flow
     token = secrets.token_urlsafe(16)
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
     valid_tokens[token] = expiry
@@ -391,13 +382,36 @@ def payment_success():
 @app.route('/', methods=['POST'])
 def optimize():
     if not is_access_valid():
-        # WhatsApp + UPI payment instructions
-        error = """
-        🔒 Pay ₹49 for 24-hour access:<br><br>
-        1. Pay via UPI: <strong>goodluckankur@okaxis</strong><br>
-        2. WhatsApp screenshot to <strong>+91 8851233153</strong><br>
-        3. Get instant access link!
-        """
+        error = Markup('''
+        <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+          <div style="font-size: 24px; font-weight: 700; color: #1e40af; margin-bottom: 16px;">🔒 Secure Access Required</div>
+          <p style="color: #4b5563; line-height: 1.6; margin-bottom: 20px;">
+            To prevent abuse and ensure quality, we offer <strong>24-hour unlimited access</strong> for a small fee of <strong>₹49</strong> (less than a coffee).
+          </p>
+          <div style="background: white; padding: 16px; border-radius: 12px; margin: 20px 0; text-align: left; border: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+              <span style="background: #dbeafe; color: #1d4ed8; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">1</span>
+              <strong>Pay via UPI</strong>
+            </div>
+            <p style="margin-left: 40px; color: #374151;">Scan or tap to pay: <strong>goodluckankur@okaxis</strong></p>
+            
+            <div style="display: flex; align-items: center; gap: 12px; margin: 16px 0;">
+              <span style="background: #dcfce7; color: #166534; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">2</span>
+              <strong>WhatsApp your payment screenshot</strong>
+            </div>
+            <p style="margin-left: 40px; color: #374151;">Send to: <strong>+91 8851233153</strong></p>
+            
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 16px;">
+              <span style="background: #ffedd5; color: #c2410c; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">3</span>
+              <strong>Get instant access link</strong>
+            </div>
+            <p style="margin-left: 40px; color: #374151;">Use the AI optimizer as many times as you want for 24 hours.</p>
+          </div>
+          <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+            🔐 Payments go directly to the developer. No third parties. No subscriptions.
+          </p>
+        </div>
+        ''')
         return render_template_string(HTML, error=error)
     
     resume = request.form['resume']
