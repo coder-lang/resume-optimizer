@@ -7,6 +7,11 @@ from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(16))
+app.config.update(
+    SESSION_COOKIE_SECURE=False,  # Required for Render (HTTPS termination)
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
 
 HTML = '''
 <!DOCTYPE html>
@@ -376,17 +381,15 @@ def is_access_valid():
 
 @app.route('/')
 def home():
-    if is_access_valid():
-        return render_template_string(HTML)
-    else:
-        return '<h2 style="text-align:center; padding:50px; font-family:sans-serif;">🔒 Access denied. <a href="https://resumeoptim.carrd.co" style="color:#4f46e5;">Pay ₹49 for 24-hour access</a>.</h2>'
+    # Always show the UI — no paywall on first visit
+    return render_template_string(HTML)
 
 @app.route('/success')
 def payment_success():
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
     session['access_granted'] = True
     session['access_expiry'] = expiry
-    return '<script>window.location.href="/";</script>'
+    return '<script>window.location.replace("https://resume-optimizer-briq.onrender.com/");</script>'
 
 @app.route('/', methods=['POST'])
 def optimize():
