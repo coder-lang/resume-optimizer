@@ -1,13 +1,12 @@
 import os
 import re
-import openai
-from flask import Flask, request, render_template_string, session
-from datetime import datetime, timedelta
 import secrets
+from datetime import datetime, timedelta
+from flask import Flask, request, render_template_string, session
+from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(16))
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 HTML = '''
 <!DOCTYPE html>
@@ -368,7 +367,6 @@ HTML = '''
 '''
 
 def is_access_valid():
-    """Check if user has valid 24-hour access"""
     if not session.get('access_granted'):
         return False
     expiry = session.get('access_expiry')
@@ -385,7 +383,6 @@ def home():
 
 @app.route('/success')
 def payment_success():
-    # Grant 24-hour access from now
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
     session['access_granted'] = True
     session['access_expiry'] = expiry
@@ -400,29 +397,34 @@ def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
     
-    # Calculate ATS keyword match
+    # ATS keyword match
     job_words = set(re.findall(r'\b[A-Z][a-z]{2,}\b|\b\w{4,}\b', job_desc.lower()))
     resume_lower = resume.lower()
     matched = sum(1 for word in job_words if word in resume_lower)
     total = len(job_words) if job_words else 1
     score = min(100, int((matched / total) * 100))
     
-    # Call OpenAI
+    # OpenAI v1.x API call
     try:
-        response = openai.ChatCompletion.create(
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{
-                "role": "user",
-                "content": f"""Rewrite this resume bullet to match the job description. 
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Rewrite this resume bullet to match the job description. 
 - Use EXACT keywords from the job description.
 - Keep under 25 words.
 - No pronouns ("I", "my"), no fluff.
 
 Resume: {resume}
 Job: {job_desc}"""
-            }]
+                }
+            ],
+            max_tokens=100,
+            temperature=0.7
         )
-        result = response.choices[0].message['content'].strip()
+        result = response.choices[0].message.content.strip()
     except Exception as e:
         result = f"Error: {str(e)}"
         return render_template_string(HTML, resume=resume, job_desc=job_desc, error=result)
