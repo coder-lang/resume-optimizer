@@ -39,6 +39,16 @@ def is_access_valid():
             return True
     return False
 
+def get_ai_response(prompt, model="gpt-4o-mini"):
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+    return response.choices[0].message.content.strip()
+
+# ===== HTML TEMPLATE =====
 HTML = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -163,20 +173,23 @@ HTML = '''
       color: var(--dark);
     }
 
-    textarea {
+    input, textarea {
       width: 100%;
       padding: 16px;
       border: 2px solid var(--border);
       border-radius: 12px;
       font-size: 16px;
       font-family: inherit;
-      resize: vertical;
-      min-height: 120px;
       transition: all 0.3s ease;
       background: #fafbff;
     }
 
-    textarea:focus {
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    input:focus, textarea:focus {
       outline: none;
       border-color: var(--primary);
       box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
@@ -296,6 +309,14 @@ HTML = '''
       transform: scale(1.02);
     }
 
+    .exp-section {
+      background: #f8fafc;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      border: 1px dashed #cbd5e1;
+    }
+
     footer {
       text-align: center;
       padding: 20px;
@@ -304,20 +325,10 @@ HTML = '''
     }
 
     @media (max-width: 600px) {
-      h1 {
-        font-size: 2rem;
-      }
-      .card-body {
-        padding: 24px 20px;
-      }
-      .btn {
-        padding: 14px;
-        font-size: 16px;
-      }
-      .score-badge {
-        font-size: 1.5rem;
-        padding: 10px 16px;
-      }
+      h1 { font-size: 2rem; }
+      .card-body { padding: 24px 20px; }
+      .btn { padding: 14px; font-size: 16px; }
+      .score-badge { font-size: 1.5rem; padding: 10px 16px; }
     }
   </style>
 </head>
@@ -330,27 +341,83 @@ HTML = '''
         </div>
       </div>
       <h1>ResumeTailor</h1>
-      <p class="subtitle">AI-powered resume bullets that beat ATS and land interviews — in 10 seconds.</p>
+      <p class="subtitle">AI-powered resume that beats ATS and lands interviews — in 10 seconds.</p>
     </header>
 
     <div class="card">
       <div class="card-header">
-        <h2 class="card-title"><i class="fas fa-edit"></i> Optimize Your Resume</h2>
+        <h2 class="card-title"><i class="fas fa-edit"></i> Build Your AI-Optimized Resume</h2>
       </div>
       <div class="card-body">
         <form method="POST">
           <div class="form-group">
-            <label><i class="fas fa-file-alt"></i> Your Resume Bullets</label>
-            <textarea name="resume" placeholder="- Managed a team of 5 developers&#10;- Reduced server costs by 30% using AWS optimization">{{ resume or '' }}</textarea>
+            <label><i class="fas fa-user"></i> Full Name</label>
+            <input type="text" name="name" value="{{ name or '' }}" required>
           </div>
 
           <div class="form-group">
-            <label><i class="fas fa-briefcase"></i> Job Description</label>
-            <textarea name="job_desc" placeholder="We're seeking a Senior DevOps Engineer with expertise in AWS, Kubernetes, and CI/CD pipelines...">{{ job_desc or '' }}</textarea>
+            <label><i class="fas fa-envelope"></i> Email</label>
+            <input type="email" name="email" value="{{ email or '' }}" required>
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-phone"></i> Phone (Optional)</label>
+            <input type="text" name="phone" value="{{ phone or '' }}">
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-briefcase"></i> Target Job Title</label>
+            <input type="text" name="job_title" value="{{ job_title or '' }}" placeholder="e.g., Senior Product Manager" required>
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-file-alt"></i> Job Description</label>
+            <textarea name="job_desc" placeholder="Paste the full job description here..." required>{{ job_desc or '' }}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-building"></i> Work Experience</label>
+            <p style="margin-bottom: 12px; color: var(--gray);">Add your current/most recent role. Optionally add a second.</p>
+
+            <!-- Role 1 (Required) -->
+            <div class="exp-section">
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                  <input type="text" name="company_0" placeholder="Company *" value="{{ experiences[0].company if experiences and experiences|length > 0 else '' }}" required>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                  <input type="text" name="role_0" placeholder="Your Title *" value="{{ experiences[0].role if experiences and experiences|length > 0 else '' }}" required>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                  <input type="text" name="duration_0" placeholder="Duration" value="{{ experiences[0].duration if experiences and experiences|length > 0 else '' }}">
+                </div>
+              </div>
+              <textarea name="bullets_0" placeholder="• Led a team of 5...&#10;• Increased revenue by 30...">{{ 
+                (experiences[0].bullets|join('\n') if experiences and experiences|length > 0 else '') 
+              }}</textarea>
+            </div>
+
+            <!-- Role 2 (Optional) -->
+            <div class="exp-section">
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                  <input type="text" name="company_1" placeholder="Company (optional)" value="{{ experiences[1].company if experiences and experiences|length > 1 else '' }}">
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                  <input type="text" name="role_1" placeholder="Your Title (optional)" value="{{ experiences[1].role if experiences and experiences|length > 1 else '' }}">
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                  <input type="text" name="duration_1" placeholder="Duration" value="{{ experiences[1].duration if experiences and experiences|length > 1 else '' }}">
+                </div>
+              </div>
+              <textarea name="bullets_1" placeholder="• Managed cross-functional projects...">{{ 
+                (experiences[1].bullets|join('\n') if experiences and experiences|length > 1 else '') 
+              }}</textarea>
+            </div>
           </div>
 
           <button class="btn" type="submit">
-            <i class="fas fa-bolt"></i> Optimize for ATS
+            <i class="fas fa-bolt"></i> Generate AI-Optimized Resume
           </button>
         </form>
 
@@ -360,20 +427,20 @@ HTML = '''
         </div>
         {% endif %}
 
-        {% if result %}
+        {% if result_text %}
         <div class="result-card">
           <div class="ats-meter">
             <div class="score-badge">{{ score }}%</div>
             <div>
               <div class="score-label">ATS Optimization Score</div>
-              <div class="keywords">{{ matched }}/{{ total }} keywords matched</div>
+              <div class="keywords">Optimized for "{{ job_title }}"</div>
             </div>
           </div>
 
-          <div class="output" id="output">{{ result }}</div>
+          <div class="output" id="output">{{ result_text }}</div>
 
-          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('output').innerText).then(() => {this.innerHTML='<i class=\'fas fa-check\'></i> Copied!'; setTimeout(() => this.innerHTML='<i class=\'fas fa-copy\'></i> Copy Optimized Bullets', 2000);})">
-            <i class="fas fa-copy"></i> Copy Optimized Bullets
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('output').innerText).then(() => {this.innerHTML='<i class=\'fas fa-check\'></i> Copied!'; setTimeout(() => this.innerHTML='<i class=\'fas fa-copy\'></i> Copy Full Resume', 2000);})">
+            <i class="fas fa-copy"></i> Copy Full Resume
           </button>
         </div>
         {% endif %}
@@ -381,7 +448,7 @@ HTML = '''
     </div>
 
     <footer>
-      <p>© 2024 ResumeTailor · AI that gets you interviews</p>
+      <p>© 2025 ResumeTailor · AI that gets you interviews</p>
     </footer>
   </div>
 </body>
@@ -418,7 +485,7 @@ def admin_token():
 @app.route('/', methods=['POST'])
 def optimize():
     if not is_access_valid():
-        # Generate UPI QR for ₹49
+        # === PAYMENT WALL (UNCHANGED) ===
         upi_id = "goodluckankur@okaxis"
         amount = "49.00"
         name = "ResumeTailor"
@@ -478,67 +545,155 @@ def optimize():
           </p>
         </div>
         ''')
-        return render_template_string(HTML, error=error)
-    
-    resume = request.form['resume']
-    job_desc = request.form['job_desc']
-    
-    # ✅ FIXED: Extract meaningful keywords (ignore punctuation, keep multi-word phrases)
-    def extract_keywords(text):
-        # Remove extra whitespace, convert to lowercase
-        text = re.sub(r'\s+', ' ', text.strip().lower())
-        # Split by commas, periods, newlines, then clean each part
-        parts = re.split(r'[,\.\n]+', text)
-        keywords = set()
-        for part in parts:
-            # Extract individual words (min length 2)
-            words = re.findall(r'\b[a-zA-Z]{2,}\b', part)
-            for word in words:
-                keywords.add(word)
-        return keywords
-    
-    job_keywords = extract_keywords(job_desc)
-    resume_keywords = extract_keywords(resume)
-    matched = sum(1 for word in job_keywords if word in resume_keywords)
-    total = len(job_keywords)
-    score = 0 if total == 0 else min(100, int((matched / total) * 100))
-    
-    # ✅ FIXED: Better OpenAI prompt — force keyword usage
-    try:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{
-                "role": "user",
-                "content": f"""Rewrite the following resume bullet points to EXACTLY match the keywords in the job description.
-
-Job Description Keywords: {', '.join(job_keywords)}
-
-Resume Bullets:
-{resume}
-
-Instructions:
-- Use ONLY keywords from the job description.
-- Keep each bullet under 25 words.
-- No pronouns ("I", "my"), no fluff.
-- Be specific and action-oriented.
-- Output only the optimized bullets, nothing else."""
-            }],
-            max_tokens=150,
-            temperature=0.3
+        # Re-render form with current data
+        name = request.form.get('name', '')
+        email = request.form.get('email', '')
+        phone = request.form.get('phone', '')
+        job_title = request.form.get('job_title', '')
+        job_desc = request.form.get('job_desc', '')
+        # Reconstruct experiences for form refill
+        experiences = []
+        for i in range(2):
+            company = request.form.get(f'company_{i}', '')
+            role = request.form.get(f'role_{i}', '')
+            if company or role:
+                duration = request.form.get(f'duration_{i}', '')
+                bullets_raw = request.form.get(f'bullets_{i}', '')
+                bullets = [line.strip() for line in bullets_raw.split('\n') if line.strip()]
+                experiences.append({"company": company, "role": role, "duration": duration, "bullets": bullets})
+        return render_template_string(HTML,
+            name=name,
+            email=email,
+            phone=phone,
+            job_title=job_title,
+            job_desc=job_desc,
+            experiences=experiences,
+            error=error
         )
-        result = response.choices[0].message.content.strip()
+
+    # === FULL RESUME PROCESSING (NEW LOGIC) ===
+    try:
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip()
+        phone = request.form.get('phone', '').strip()
+        job_title = request.form.get('job_title', '').strip()
+        job_desc = request.form.get('job_desc', '').strip()
+
+        # Parse up to 2 roles (Role 0 required, Role 1 optional)
+        experiences = []
+        for i in range(2):
+            company = request.form.get(f'company_{i}', '').strip()
+            role = request.form.get(f'role_{i}', '').strip()
+            if not company or not role:
+                if i == 0:
+                    raise ValueError("Please fill in your first work experience.")
+                else:
+                    continue  # skip optional second role
+            duration = request.form.get(f'duration_{i}', '').strip()
+            bullets_raw = request.form.get(f'bullets_{i}', '')
+            bullets = []
+            for line in bullets_raw.split('\n'):
+                clean = line.strip()
+                if clean:
+                    if clean.startswith(('•', '-', '*')):
+                        clean = clean[1:].strip()
+                    bullets.append(clean)
+            experiences.append({"company": company, "role": role, "duration": duration, "bullets": bullets})
+
+        # Generate Professional Summary
+        summary = get_ai_response(f"""
+        Write a 3-sentence professional summary for a {job_title}.
+        Use keywords from this job description: {job_desc}.
+        Focus on measurable impact, relevant skills, and seniority. Avoid pronouns.
+        Start with the job title. No fluff.
+        """)
+
+        # Enhance each bullet
+        enhanced_experiences = []
+        for exp in experiences:
+            enhanced_bullets = []
+            for bullet in exp["bullets"]:
+                if not bullet:
+                    continue
+                improved = get_ai_response(f"""
+                Rewrite this resume bullet to be stronger for a {job_title} role.
+                - Start with a powerful past-tense action verb (e.g., Spearheaded, Optimized, Engineered)
+                - Add a plausible quantifiable result (%, $, #, time) if missing
+                - Include 1–2 keywords from this job description: {job_desc}
+                - Keep it under 25 words
+                - Return ONLY the improved bullet, nothing else.
+                Original: "{bullet}"
+                """).strip().strip('"').strip("'")
+                enhanced_bullets.append(improved)
+            enhanced_experiences.append({**exp, "bullets": enhanced_bullets})
+
+        # Generate ATS Score
+        all_content = summary + " " + " ".join(b for exp in enhanced_experiences for b in exp["bullets"])
+        try:
+            score = int(get_ai_response(f"""
+            Rate how well this resume content matches the job description on a scale of 0–100.
+            Consider: keyword alignment, required skills, experience level, and relevance.
+            Job Description: {job_desc}
+            Resume Content: {all_content}
+            Respond ONLY with an integer (e.g., 88).
+            """))
+            score = max(0, min(100, score))
+        except:
+            score = 75
+
+        # Format final resume text
+        lines = [name]
+        contact = []
+        if email: contact.append(email)
+        if phone: contact.append(phone)
+        if contact: lines.append(" | ".join(contact))
+        lines += ["", "PROFESSIONAL SUMMARY", summary, "", "WORK EXPERIENCE"]
+        for exp in enhanced_experiences:
+            lines.append(f"{exp['role']} | {exp['company']}")
+            if exp['duration']: lines.append(exp['duration'])
+            for b in exp['bullets']:
+                lines.append(f"• {b}")
+            lines.append("")
+        lines.append(f"[AI Resume Score: {score}/100 — ATS Optimized]")
+        result_text = "\n".join(lines)
+
+        return render_template_string(HTML,
+            name=name,
+            email=email,
+            phone=phone,
+            job_title=job_title,
+            job_desc=job_desc,
+            experiences=experiences,
+            result_text=result_text,
+            score=score
+        )
+
     except Exception as e:
-        result = f"Error: {str(e)}"
-        return render_template_string(HTML, resume=resume, job_desc=job_desc, error=result)
-    
-    return render_template_string(HTML, 
-                                resume=resume, 
-                                job_desc=job_desc, 
-                                result=result,
-                                score=score,
-                                matched=matched,
-                                total=total)
+        error = Markup(f'<div style="color:#ef4444;padding:15px;background:#fef2f2;border-radius:8px;">⚠️ {str(e)}</div>')
+        # Reconstruct form data for refill
+        name = request.form.get('name', '')
+        email = request.form.get('email', '')
+        phone = request.form.get('phone', '')
+        job_title = request.form.get('job_title', '')
+        job_desc = request.form.get('job_desc', '')
+        experiences = []
+        for i in range(2):
+            company = request.form.get(f'company_{i}', '')
+            role = request.form.get(f'role_{i}', '')
+            if company or role:
+                duration = request.form.get(f'duration_{i}', '')
+                bullets_raw = request.form.get(f'bullets_{i}', '')
+                bullets = [line.strip() for line in bullets_raw.split('\n') if line.strip()]
+                experiences.append({"company": company, "role": role, "duration": duration, "bullets": bullets})
+        return render_template_string(HTML,
+            name=name,
+            email=email,
+            phone=phone,
+            job_title=job_title,
+            job_desc=job_desc,
+            experiences=experiences,
+            error=error
+        )
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
