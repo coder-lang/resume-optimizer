@@ -12,7 +12,7 @@ import qrcode
 
 app = Flask(__name__)
 
-# Persistent token storage (survives short sleeps on Render free tier)
+# Persistent token storage
 TOKEN_FILE = "/tmp/resume_tokens.json"
 
 def load_tokens():
@@ -392,7 +392,6 @@ HTML = '''
 def home():
     return render_template_string(HTML)
 
-# 🔐 SECURE ADMIN ENDPOINT — only you can access it
 @app.route('/admin/token')
 def admin_token():
     admin_key = os.getenv("ADMIN_KEY")
@@ -435,7 +434,7 @@ def optimize():
         img.save(buffer, format="PNG")
         buffer.seek(0)
         img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-        qr_data_uri = f"image/png;base64,{img_base64}"
+        qr_data_uri = f"data:image/png;base64,{img_base64}"
 
         error = Markup(f'''
         <div style="text-align: center; max-width: 600px; margin: 0 auto;">
@@ -484,8 +483,10 @@ def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
     
+    # ✅ FIXED: Better keyword extraction (handles punctuation, case, whitespace)
     def extract_keywords(text):
-        words = re.split(r'[,\.\s]+', text.lower())
+        # Remove punctuation, split by whitespace, convert to lowercase
+        words = re.findall(r'\b[a-zA-Z]+\b', text.lower())
         return {word.strip() for word in words if len(word.strip()) >= 2}
     
     job_keywords = extract_keywords(job_desc)
@@ -494,6 +495,7 @@ def optimize():
     total = len(job_keywords)
     score = 0 if total == 0 else min(100, int((matched / total) * 100))
     
+    # OpenAI Call
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
