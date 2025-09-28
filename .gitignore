@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+instance/
+.env
+*.sqlite
+.DS_Store
+*.log
+*.pot
+*.mo
+*.db
+*.sqlite3
+*.egg-info/
+dist/
+appcopy.py/
+appcopy.py

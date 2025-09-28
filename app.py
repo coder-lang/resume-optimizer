@@ -1,10 +1,13 @@
 import os
 import re
+import io
+import base64
 from datetime import datetime, timedelta
 from flask import Flask, request, render_template_string
 from markupsafe import Markup
 from openai import OpenAI
 import secrets
+import qrcode
 
 app = Flask(__name__)
 
@@ -374,7 +377,6 @@ def home():
 
 @app.route('/success')
 def payment_success():
-    # Kept for future use — not used in WhatsApp flow
     token = secrets.token_urlsafe(16)
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
     valid_tokens[token] = expiry
@@ -383,17 +385,34 @@ def payment_success():
 @app.route('/', methods=['POST'])
 def optimize():
     if not is_access_valid():
-        error = Markup('''
+        # Auto-generate UPI QR code for ₹49
+        upi_id = "goodluckankur@okaxis"
+        amount = "49.00"
+        name = "ResumeTailor"
+        note = "24-hour access"
+        upi_url = f"upi://pay?pa={upi_id}&pn={name}&am={amount}&tn={note}&cu=INR"
+
+        qr = qrcode.QRCode(version=1, box_size=8, border=2)
+        qr.add_data(upi_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        qr_data_uri = f"data:image/png;base64,{img_base64}"
+
+        error = Markup(f'''
         <div style="text-align: center; max-width: 600px; margin: 0 auto;">
           <div style="font-size: 24px; font-weight: 700; color: #1e40af; margin-bottom: 16px;">🔒 Secure Access Required</div>
           <p style="color: #4b5563; line-height: 1.6; margin-bottom: 20px;">
             To prevent abuse and ensure quality, we offer <strong>24-hour unlimited access</strong> for a small fee of <strong>₹49</strong> (less than a coffee).
           </p>
 
-          <!-- QR Code for UPI Payment -->
           <div style="background: white; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center; border: 1px solid #e2e8f0;">
-            <h3 style="margin-bottom: 12px; color: #1d4ed8;">📱 Scan to Pay via UPI</h3>
-            <img src="https://i.imgur.com/9KvzGyW.png" alt="UPI QR Code" style="max-width: 220px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" />
+            <h3 style="margin-bottom: 12px; color: #1d4ed8;">📱 Scan to Pay ₹49 via UPI</h3>
+            <img src="{qr_data_uri}" alt="UPI QR Code" style="max-width: 220px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" />
             <p style="font-size: 14px; color: #374151; margin-top: 12px;">
               <strong>UPI ID:</strong> goodluckankur@okaxis
             </p>
@@ -407,7 +426,7 @@ def optimize():
               <span style="background: #dbeafe; color: #1d4ed8; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">1</span>
               <strong>Pay via UPI</strong>
             </div>
-            <p style="margin-left: 40px; color: #374151;">Scan the QR code or enter UPI ID manually.</p>
+            <p style="margin-left: 40px; color: #374151;">Scan the QR code above (₹49 auto-filled).</p>
             
             <div style="display: flex; align-items: center; gap: 12px; margin: 16px 0;">
               <span style="background: #dcfce7; color: #166534; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">2</span>
