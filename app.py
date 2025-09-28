@@ -389,12 +389,25 @@ def optimize():
           <p style="color: #4b5563; line-height: 1.6; margin-bottom: 20px;">
             To prevent abuse and ensure quality, we offer <strong>24-hour unlimited access</strong> for a small fee of <strong>₹49</strong> (less than a coffee).
           </p>
+
+          <!-- QR Code for UPI Payment -->
+          <div style="background: white; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center; border: 1px solid #e2e8f0;">
+            <h3 style="margin-bottom: 12px; color: #1d4ed8;">📱 Scan to Pay via UPI</h3>
+            <img src="https://i.imgur.com/9KvzGyW.png" alt="UPI QR Code" style="max-width: 220px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" />
+            <p style="font-size: 14px; color: #374151; margin-top: 12px;">
+              <strong>UPI ID:</strong> goodluckankur@okaxis
+            </p>
+            <p style="font-size: 13px; color: #6b7280; margin-top: 6px;">
+              Works with Google Pay, PhonePe, Paytm, BHIM, and all UPI apps.
+            </p>
+          </div>
+
           <div style="background: white; padding: 16px; border-radius: 12px; margin: 20px 0; text-align: left; border: 1px solid #e2e8f0;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
               <span style="background: #dbeafe; color: #1d4ed8; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">1</span>
               <strong>Pay via UPI</strong>
             </div>
-            <p style="margin-left: 40px; color: #374151;">Scan or tap to pay: <strong>goodluckankur@okaxis</strong></p>
+            <p style="margin-left: 40px; color: #374151;">Scan the QR code or enter UPI ID manually.</p>
             
             <div style="display: flex; align-items: center; gap: 12px; margin: 16px 0;">
               <span style="background: #dcfce7; color: #166534; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">2</span>
