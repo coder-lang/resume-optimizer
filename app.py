@@ -392,18 +392,14 @@ HTML = '''
 def home():
     return render_template_string(HTML)
 
-@app.route('/success')
-def payment_success():
-    token = secrets.token_urlsafe(16)
-    expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
-    tokens = load_tokens()
-    tokens[token] = expiry
-    save_tokens(tokens)
-    return f'<script>alert("Thank you! You now have 24-hour access."); window.location.replace("https://resume-optimizer-briq.onrender.com/?token={token}");</script>'
-
-@app.route('/generate-token')
-def generate_token():
-    # Optional: add password protection if needed
+# 🔐 SECURE ADMIN ENDPOINT — only you can access it
+@app.route('/admin/token')
+def admin_token():
+    admin_key = os.getenv("ADMIN_KEY")
+    if not admin_key:
+        return "ADMIN_KEY not set in environment", 500
+    if request.args.get('key') != admin_key:
+        return "Access denied", 403
     token = secrets.token_urlsafe(16)
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
     tokens = load_tokens()
@@ -411,10 +407,13 @@ def generate_token():
     save_tokens(tokens)
     link = f"https://resume-optimizer-briq.onrender.com/?token={token}"
     return f'''
-    <h2>✅ Token Generated</h2>
-    <p>Send this link to the user:</p>
-    <input type="text" value="{link}" style="width:100%; padding:10px; font-size:16px;" onclick="this.select()" readonly />
-    <p><a href="{link}" target="_blank">Test Link</a></p>
+    <div style="font-family: sans-serif; padding: 30px; max-width: 600px; margin: 0 auto;">
+        <h2>✅ Token Generated for Paying User</h2>
+        <p>Send this link to the user on WhatsApp:</p>
+        <input type="text" value="{link}" style="width:100%; padding:12px; font-size:16px;" onclick="this.select()" readonly />
+        <p style="margin-top: 20px;"><a href="{link}" target="_blank">🔗 Test Link</a></p>
+        <p style="color: #666; font-size: 14px;">Token expires in 24 hours.</p>
+    </div>
     '''
 
 @app.route('/', methods=['POST'])
@@ -436,7 +435,7 @@ def optimize():
         img.save(buffer, format="PNG")
         buffer.seek(0)
         img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-        qr_data_uri = f"data:image/png;base64,{img_base64}"
+        qr_data_uri = f"image/png;base64,{img_base64}"
 
         error = Markup(f'''
         <div style="text-align: center; max-width: 600px; margin: 0 auto;">
