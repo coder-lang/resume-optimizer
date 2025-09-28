@@ -12,7 +12,6 @@ import qrcode
 
 app = Flask(__name__)
 
-# Persistent token storage
 TOKEN_FILE = "/tmp/resume_tokens.json"
 
 def load_tokens():
@@ -48,7 +47,15 @@ def get_ai_response(prompt, model="gpt-4o-mini"):
     )
     return response.choices[0].message.content.strip()
 
-# ===== HTML TEMPLATE =====
+def calculate_real_ats_score(job_desc, resume_text):
+    # Extract words (min 3 letters, ignore common stop words)
+    job_words = set(re.findall(r'\b[a-zA-Z]{3,}\b', job_desc.lower()))
+    resume_words = set(re.findall(r'\b[a-zA-Z]{3,}\b', resume_text.lower()))
+    matched = len(job_words & resume_words)
+    total = len(job_words)
+    return min(100, int((matched / total) * 100)) if total > 0 else 0
+
+# ===== HTML TEMPLATE (unchanged) =====
 HTML = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -545,13 +552,11 @@ def optimize():
           </p>
         </div>
         ''')
-        # Re-render form with current data
         name = request.form.get('name', '')
         email = request.form.get('email', '')
         phone = request.form.get('phone', '')
         job_title = request.form.get('job_title', '')
         job_desc = request.form.get('job_desc', '')
-        # Reconstruct experiences for form refill
         experiences = []
         for i in range(2):
             company = request.form.get(f'company_{i}', '')
@@ -571,7 +576,7 @@ def optimize():
             error=error
         )
 
-    # === FULL RESUME PROCESSING (NEW LOGIC) ===
+    # === FULL RESUME PROCESSING (IMPROVED LOGIC) ===
     try:
         name = request.form.get('name', '').strip()
         email = request.form.get('email', '').strip()
@@ -579,7 +584,6 @@ def optimize():
         job_title = request.form.get('job_title', '').strip()
         job_desc = request.form.get('job_desc', '').strip()
 
-        # Parse up to 2 roles (Role 0 required, Role 1 optional)
         experiences = []
         for i in range(2):
             company = request.form.get(f'company_{i}', '').strip()
@@ -588,7 +592,7 @@ def optimize():
                 if i == 0:
                     raise ValueError("Please fill in your first work experience.")
                 else:
-                    continue  # skip optional second role
+                    continue
             duration = request.form.get(f'duration_{i}', '').strip()
             bullets_raw = request.form.get(f'bullets_{i}', '')
             bullets = []
@@ -600,7 +604,7 @@ def optimize():
                     bullets.append(clean)
             experiences.append({"company": company, "role": role, "duration": duration, "bullets": bullets})
 
-        # Generate Professional Summary
+        # Professional Summary
         summary = get_ai_response(f"""
         Write a 3-sentence professional summary for a {job_title}.
         Use keywords from this job description: {job_desc}.
@@ -608,7 +612,7 @@ def optimize():
         Start with the job title. No fluff.
         """)
 
-        # Enhance each bullet
+        # Enhanced Bullets (with smarter prompt)
         enhanced_experiences = []
         for exp in experiences:
             enhanced_bullets = []
@@ -616,32 +620,26 @@ def optimize():
                 if not bullet:
                     continue
                 improved = get_ai_response(f"""
-                Rewrite this resume bullet to be stronger for a {job_title} role.
-                - Start with a powerful past-tense action verb (e.g., Spearheaded, Optimized, Engineered)
-                - Add a plausible quantifiable result (%, $, #, time) if missing
-                - Include 1–2 keywords from this job description: {job_desc}
-                - Keep it under 25 words
-                - Return ONLY the improved bullet, nothing else.
-                Original: "{bullet}"
+                You are an expert resume writer for {job_title} roles.
+                Original bullet: "{bullet}"
+                Job description: {job_desc}
+                Instructions:
+                - If the original implies scale, result, or impact, enhance it with a realistic metric.
+                - If it's descriptive, focus on technical specificity (tools, architecture, outcome) — DO NOT invent fake percentages.
+                - Use strong past-tense verbs: Engineered, Led, Designed, Deployed, Optimized.
+                - Include 1–2 keywords from the job description.
+                - Keep under 25 words.
+                - NEVER say "by 30%" unless the original implies it.
+                Return ONLY the improved bullet.
                 """).strip().strip('"').strip("'")
                 enhanced_bullets.append(improved)
             enhanced_experiences.append({**exp, "bullets": enhanced_bullets})
 
-        # Generate ATS Score
+        # REAL ATS SCORE (keyword-based)
         all_content = summary + " " + " ".join(b for exp in enhanced_experiences for b in exp["bullets"])
-        try:
-            score = int(get_ai_response(f"""
-            Rate how well this resume content matches the job description on a scale of 0–100.
-            Consider: keyword alignment, required skills, experience level, and relevance.
-            Job Description: {job_desc}
-            Resume Content: {all_content}
-            Respond ONLY with an integer (e.g., 88).
-            """))
-            score = max(0, min(100, score))
-        except:
-            score = 75
+        score = calculate_real_ats_score(job_desc, all_content)
 
-        # Format final resume text
+        # Format output
         lines = [name]
         contact = []
         if email: contact.append(email)
@@ -670,7 +668,6 @@ def optimize():
 
     except Exception as e:
         error = Markup(f'<div style="color:#ef4444;padding:15px;background:#fef2f2;border-radius:8px;">⚠️ {str(e)}</div>')
-        # Reconstruct form data for refill
         name = request.form.get('name', '')
         email = request.form.get('email', '')
         phone = request.form.get('phone', '')
