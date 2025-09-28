@@ -2,6 +2,7 @@ import os
 import re
 import io
 import base64
+import json
 from datetime import datetime, timedelta
 from flask import Flask, request, render_template_string
 from markupsafe import Markup
@@ -11,8 +12,32 @@ import qrcode
 
 app = Flask(__name__)
 
-# In-memory token store (resets on deploy — fine for MVP)
-valid_tokens = {}
+# Persistent token storage (survives short sleeps on Render free tier)
+TOKEN_FILE = "/tmp/resume_tokens.json"
+
+def load_tokens():
+    if os.path.exists(TOKEN_FILE):
+        try:
+            with open(TOKEN_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_tokens(tokens):
+    with open(TOKEN_FILE, "w") as f:
+        json.dump(tokens, f)
+
+def is_access_valid():
+    token = request.args.get('token')
+    if not token:
+        return False
+    tokens = load_tokens()
+    if token in tokens:
+        expiry = tokens[token]
+        if datetime.utcnow().isoformat() < expiry:
+            return True
+    return False
 
 HTML = '''
 <!DOCTYPE html>
@@ -363,14 +388,6 @@ HTML = '''
 </html>
 '''
 
-def is_access_valid():
-    token = request.args.get('token')
-    if token and token in valid_tokens:
-        expiry = valid_tokens[token]
-        if datetime.utcnow().isoformat() < expiry:
-            return True
-    return False
-
 @app.route('/')
 def home():
     return render_template_string(HTML)
@@ -379,13 +396,31 @@ def home():
 def payment_success():
     token = secrets.token_urlsafe(16)
     expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
-    valid_tokens[token] = expiry
+    tokens = load_tokens()
+    tokens[token] = expiry
+    save_tokens(tokens)
     return f'<script>alert("Thank you! You now have 24-hour access."); window.location.replace("https://resume-optimizer-briq.onrender.com/?token={token}");</script>'
+
+@app.route('/generate-token')
+def generate_token():
+    # Optional: add password protection if needed
+    token = secrets.token_urlsafe(16)
+    expiry = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+    tokens = load_tokens()
+    tokens[token] = expiry
+    save_tokens(tokens)
+    link = f"https://resume-optimizer-briq.onrender.com/?token={token}"
+    return f'''
+    <h2>✅ Token Generated</h2>
+    <p>Send this link to the user:</p>
+    <input type="text" value="{link}" style="width:100%; padding:10px; font-size:16px;" onclick="this.select()" readonly />
+    <p><a href="{link}" target="_blank">Test Link</a></p>
+    '''
 
 @app.route('/', methods=['POST'])
 def optimize():
     if not is_access_valid():
-        # Auto-generate UPI QR code for ₹49
+        # Generate UPI QR for ₹49
         upi_id = "goodluckankur@okaxis"
         amount = "49.00"
         name = "ResumeTailor"
@@ -450,7 +485,6 @@ def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
     
-    # ATS Score
     def extract_keywords(text):
         words = re.split(r'[,\.\s]+', text.lower())
         return {word.strip() for word in words if len(word.strip()) >= 2}
@@ -461,7 +495,6 @@ def optimize():
     total = len(job_keywords)
     score = 0 if total == 0 else min(100, int((matched / total) * 100))
     
-    # OpenAI Call
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
