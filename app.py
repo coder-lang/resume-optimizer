@@ -1,7 +1,8 @@
 import os
 import re
 from datetime import datetime, timedelta
-from flask import Flask, request, render_template_string, Markup
+from flask import Flask, request, render_template_string
+from markupsafe import Markup
 from openai import OpenAI
 import secrets
 
