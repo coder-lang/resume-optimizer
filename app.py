@@ -483,11 +483,19 @@ def optimize():
     resume = request.form['resume']
     job_desc = request.form['job_desc']
     
-    # ✅ FIXED: Better keyword extraction (handles punctuation, case, whitespace)
+    # ✅ FIXED: Extract meaningful keywords (ignore punctuation, keep multi-word phrases)
     def extract_keywords(text):
-        # Remove punctuation, split by whitespace, convert to lowercase
-        words = re.findall(r'\b[a-zA-Z]+\b', text.lower())
-        return {word.strip() for word in words if len(word.strip()) >= 2}
+        # Remove extra whitespace, convert to lowercase
+        text = re.sub(r'\s+', ' ', text.strip().lower())
+        # Split by commas, periods, newlines, then clean each part
+        parts = re.split(r'[,\.\n]+', text)
+        keywords = set()
+        for part in parts:
+            # Extract individual words (min length 2)
+            words = re.findall(r'\b[a-zA-Z]{2,}\b', part)
+            for word in words:
+                keywords.add(word)
+        return keywords
     
     job_keywords = extract_keywords(job_desc)
     resume_keywords = extract_keywords(resume)
@@ -495,20 +503,29 @@ def optimize():
     total = len(job_keywords)
     score = 0 if total == 0 else min(100, int((matched / total) * 100))
     
-    # OpenAI Call
+    # ✅ FIXED: Better OpenAI prompt — force keyword usage
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": f"""Rewrite this resume bullet to match the job description. 
-- Use EXACT keywords from the job description.
-- Keep under 25 words.
-- No pronouns ("I", "my"), no fluff.
+            messages=[{
+                "role": "user",
+                "content": f"""Rewrite the following resume bullet points to EXACTLY match the keywords in the job description.
 
-Resume: {resume}
-Job: {job_desc}"""}],
-            max_tokens=100,
-            temperature=0.7
+Job Description Keywords: {', '.join(job_keywords)}
+
+Resume Bullets:
+{resume}
+
+Instructions:
+- Use ONLY keywords from the job description.
+- Keep each bullet under 25 words.
+- No pronouns ("I", "my"), no fluff.
+- Be specific and action-oriented.
+- Output only the optimized bullets, nothing else."""
+            }],
+            max_tokens=150,
+            temperature=0.3
         )
         result = response.choices[0].message.content.strip()
     except Exception as e:
